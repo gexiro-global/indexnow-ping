@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "indexnow-ping"
+version = "0.1.0"
+description = "Notify search engines (IndexNow + Google Search Console) of a site's sitemap URLs, with a pre-launch robots.txt guard."
+readme = "README.md"
+requires-python = ">=3.9"
+license = "Apache-2.0"
+authors = [
+  {name = "Gexiro Global Enterprises Ltd"}
+]
+keywords = [
+  "indexnow", "seo", "sitemap", "search-console", "gsc", "bing",
+  "crawling", "indexing", "robots-txt", "webmaster",
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Topic :: Internet :: WWW/HTTP :: Site Management",
+]
+dependencies = []
+
+[project.optional-dependencies]
+# The IndexNow layer needs nothing beyond the standard library. The Google
+# Search Console layer is optional and imported lazily.
+gsc = ["google-api-python-client>=2,<3", "google-auth>=2,<3"]
+dev = ["pytest>=8,<10", "build>=1,<2"]
+
+[project.urls]
+Homepage = "https://github.com/gexiro-global/indexnow-ping"
+Repository = "https://github.com/gexiro-global/indexnow-ping"
+
+[project.scripts]
+indexnow-ping = "indexnow_ping.ping:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["indexnow_ping*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

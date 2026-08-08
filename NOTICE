@@ -1,0 +1,14 @@
+indexnow-ping
+Copyright 2026 Gexiro Global Enterprises Ltd.
+
+This tool talks to third-party services and, optionally, uses a third-party
+client library. It does not vendor their code.
+
+  - IndexNow protocol / endpoint (api.indexnow.org) -- Microsoft, Yandex et al.
+    https://www.indexnow.org/
+  - Google Search Console API, via the optional "gsc" extra:
+      google-api-python-client (Apache-2.0)  https://github.com/googleapis/google-api-python-client
+      google-auth               (Apache-2.0)  https://github.com/googleapis/google-auth-library-python
+
+All trademarks are the property of their respective owners. This project is not
+affiliated with or endorsed by Microsoft, Yandex, or Google.

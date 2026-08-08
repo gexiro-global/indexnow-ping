@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# Test / tooling
+.pytest_cache/
+.coverage
+.mypy_cache/
+.ruff_cache/
+
+# Local secrets / keys (never commit)
+*.key
+*-indexnow.key
+gsc-key*.json
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+*.bak
