@@ -71,6 +71,7 @@ def robots_allows_launch(robots_text: str) -> bool:
     """
     star_group = False      # current group's agents include '*'
     reading_agents = False  # still accumulating User-agent lines for this group
+    robots_text = robots_text.lstrip("\ufeff")  # drop a UTF-8 BOM before the first field
     for raw in robots_text.splitlines():
         line = raw.split("#", 1)[0].strip()  # drop inline comments
         if not line or ":" not in line:

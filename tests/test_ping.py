@@ -32,6 +32,8 @@ def test_robots_blanket_block_aborts_various_whitespace():
     assert ping.robots_allows_launch("User-agent: *\nDisallow: / # pre-launch") is False
     # consecutive user-agent lines form ONE group: '*' is blocked too
     assert ping.robots_allows_launch("User-agent: *\nUser-agent: Bot\nDisallow: /") is False
+    # a UTF-8 BOM before the first field must not defeat the guard
+    assert ping.robots_allows_launch("\ufeffUser-agent: *\nDisallow: /") is False
 
 
 def test_robots_allows_when_not_blanket():
@@ -215,6 +217,17 @@ def test_main_sitemap_unavailable_aborts_both_layers(monkeypatch):
     rc = ping.main(["example.com", "--force", "--indexnow-key", "K", "--gsc-key-file", "/x.json"])
     assert rc == 3
     assert calls["in"] is False and calls["gsc"] is False  # neither engine told to look
+
+
+def test_main_zero_limit_submits_nothing(monkeypatch):
+    # full flow: --limit 0 -> collect yields [] -> IndexNow skipped -> exit 3
+    monkeypatch.setattr(ping, "make_fetcher", lambda *a, **k: (lambda url: URLSET))
+    called = {"n": False}
+    monkeypatch.setattr(ping, "submit_indexnow",
+                        lambda *a, **k: called.__setitem__("n", True) or 200)
+    rc = ping.main(["example.com", "--force", "--indexnow-key", "K", "--limit", "0"])
+    assert rc == 3
+    assert called["n"] is False
 
 
 def test_main_no_key_skips_indexnow(monkeypatch):
