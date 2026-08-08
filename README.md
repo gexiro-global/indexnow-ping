@@ -1,6 +1,7 @@
 # indexnow-ping — safe sitemap submission for IndexNow and Google Search Console
 
 [![ci](https://github.com/gexiro-global/indexnow-ping/actions/workflows/ci.yml/badge.svg)](https://github.com/gexiro-global/indexnow-ping/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/indexnow-ping.svg)](https://pypi.org/project/indexnow-ping/)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
 
@@ -17,14 +18,10 @@ and aborts if the site still blocks every crawler (`User-agent: *` + `Disallow: 
 Staging and not-yet-launched sites therefore can't be leaked to the index by a
 stray cron run. That guard is the reason this exists.
 
-> **PyPI publication is pending.** Install from source for now:
-
 ```bash
-pip install "git+https://github.com/gexiro-global/indexnow-ping.git"              # IndexNow only (pure stdlib)
-pip install "indexnow-ping[gsc] @ git+https://github.com/gexiro-global/indexnow-ping.git"  # + Google Search Console
+pip install indexnow-ping                 # IndexNow only (pure standard library)
+pip install "indexnow-ping[gsc]"          # + Google Search Console support
 ```
-
-Once published this will simply be `pip install indexnow-ping` (and `[gsc]`).
 
 ## Use
 
