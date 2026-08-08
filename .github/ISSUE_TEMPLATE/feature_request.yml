@@ -1,0 +1,18 @@
+name: Feature request
+description: Suggest a new capability (e.g. another submission endpoint or output format).
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What workflow friction or gap would this address?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What should it do? Keep it consistent with the fail-closed, same-site, offline-testable design.
+    validations:
+      required: true

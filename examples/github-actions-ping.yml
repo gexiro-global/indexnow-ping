@@ -1,0 +1,23 @@
+# Example: ping search engines after a production deploy.
+# Store the IndexNow key as a repository secret (INDEXNOW_KEY). It is not a
+# high-value secret (you also serve it at https://<domain>/<key>.txt), but keeping
+# it out of the repo is cleaner. The GSC service-account JSON, if used, IS sensitive.
+name: indexnow-ping
+
+on:
+  workflow_dispatch:
+  deployment_status:
+
+jobs:
+  ping:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.deployment_status.state == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - run: pip install "git+https://github.com/gexiro-global/indexnow-ping.git"
+      - name: Notify IndexNow
+        env:
+          INDEXNOW_KEY: ${{ secrets.INDEXNOW_KEY }}
+        run: indexnow-ping example.com   # the pre-launch guard aborts if robots blocks all

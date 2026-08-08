@@ -1,0 +1,26 @@
+name: Bug report
+description: The tool submitted (or failed to submit) incorrectly, or the guard misbehaved.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What did the tool do vs. what you expected? Guard bypasses (pinged a pre-launch site) and off-site fetches/submissions are highest priority.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: The exact command and a minimal input (robots.txt / sitemap). Do not include secrets.
+      render: shell
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Package version and Python version.
+    validations:
+      required: true
