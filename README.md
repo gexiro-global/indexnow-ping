@@ -55,7 +55,8 @@ history). The GSC service-account JSON **is** sensitive — pass a path, never c
 | `--timeout S` | per-request timeout |
 | `--force` | skip the pre-launch robots guard |
 
-Exit codes: `0` ran, `1` pre-launch guard aborted, `2` usage error.
+Exit codes: `0` submitted, `1` pre-launch guard aborted, `2` usage error, `3` ran
+but nothing submitted (no key/URLs, unavailable sitemap, or all submissions failed).
 
 ## Design notes
 
@@ -65,8 +66,13 @@ Exit codes: `0` ran, `1` pre-launch guard aborted, `2` usage error.
   checked to belong to the target host before it is followed or submitted, so a
   tampered sitemap can't make the tool ping arbitrary hosts. A sitemap-index is
   followed one level; its child-sitemap links are never mistaken for page URLs.
-- **URLs come from the site.** The tool never invents URLs; it submits what the
-  sitemap lists (capped by `--limit`), falling back to the domain root.
+- **URLs come from the site.** The tool never invents URLs; it submits exactly what
+  the sitemap lists (capped by `--limit`). A valid but empty sitemap submits
+  nothing, and an *unavailable* sitemap is not treated as an empty one — it aborts
+  the IndexNow submission rather than announcing a synthesized URL.
+- **Redirects stay on-site.** HTTP redirects for `robots.txt` and sitemaps are
+  followed only within the target site; a cross-origin redirect is an error, so a
+  redirecting endpoint cannot bypass the guard or point the tool at another host.
 - **Optional heavy dep.** IndexNow is standard-library only; the Google client is
   imported lazily and required solely for the GSC layer.
 

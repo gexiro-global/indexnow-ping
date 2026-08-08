@@ -8,11 +8,12 @@ Two layers, both optional and independent:
 Safety feature (the reason this exists): a *launch guard*. Before pinging anything
 it reads the target's robots.txt and ABORTS if the site still blocks all crawlers
 (`User-agent: *` + `Disallow: /`), so you cannot accidentally announce a
-pre-launch/staging site to the search engines. Override with --force.
+pre-launch/staging site. Override with --force.
 
-URLs come only from the site's own sitemap, and every URL is checked to belong to
-the target host before it is submitted -- a sitemap cannot make this tool ping
-arbitrary third-party hosts.
+Hardening: URLs come only from the site's own sitemap; every URL (and every child
+sitemap in a sitemap-index) must be an http(s) URL on the target host before it is
+followed or submitted; and HTTP redirects are constrained to the same site, so a
+redirecting robots.txt/sitemap cannot turn this into blind SSRF or a guard bypass.
 
 The parsing/validation logic is pure and import-light; network access is confined
 to small, injectable functions so the whole thing is testable offline.
@@ -21,14 +22,20 @@ import argparse
 import json
 import os
 import sys
+import urllib.error
 import xml.etree.ElementTree as ET
 from urllib.parse import urlparse
-from urllib.request import Request, urlopen
-import urllib.error
+from urllib.request import (
+    HTTPRedirectHandler, Request, build_opener, urlopen,
+)
 
 MAX_FETCH_BYTES = 5_000_000
 DEFAULT_LIMIT = 200
 INDEXNOW_ENDPOINT = "https://api.indexnow.org/indexnow"
+
+
+def log(msg: str) -> None:
+    print(msg, flush=True)
 
 
 # ---------------------------------------------------------------- pure helpers
@@ -39,28 +46,37 @@ def _localname(tag: str) -> str:
 
 
 def same_site(url: str, domain: str) -> bool:
-    """True if *url*'s host is *domain* or a subdomain of it (case-insensitive)."""
-    host = (urlparse(url).hostname or "").lower()
+    """True if *url* is an http(s) URL whose host is *domain* or a subdomain.
+
+    Requires an http/https scheme (rejects ftp:, httpx:, etc.) and a hostname that
+    equals *domain* or ends with '.'+domain -- so 'example.com.evil.com' and bare
+    non-URLs are rejected.
+    """
+    p = urlparse(url)
+    if p.scheme not in ("http", "https"):
+        return False
+    host = (p.hostname or "").lower()
     domain = domain.lower().strip().rstrip(".")
     return bool(host) and (host == domain or host.endswith("." + domain))
 
 
 def robots_allows_launch(robots_text: str) -> bool:
-    """Replicate the launch guard: only `User-agent: *` + `Disallow: /` aborts.
+    """Launch guard: only a blanket `User-agent: *` + `Disallow: /` aborts.
 
-    A blanket block for all agents means the site is not launched yet. Any other
-    robots configuration (including no rules) is treated as launched.
+    Robust to inline comments and arbitrary whitespace (tabs/spaces). Any other
+    robots configuration (including none) is treated as launched.
     """
     in_star = False
     for raw in robots_text.splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#"):
+        line = raw.split("#", 1)[0].strip()  # drop inline comments
+        if not line or ":" not in line:
             continue
-        low = line.lower()
-        if low.startswith("user-agent:"):
-            in_star = low.split(":", 1)[1].strip() == "*"
-            continue
-        if in_star and low.replace(" ", "") == "disallow:/":
+        field, value = line.split(":", 1)
+        field = field.strip().lower()
+        value = value.strip()
+        if field == "user-agent":
+            in_star = value == "*"
+        elif field == "disallow" and in_star and value == "/":
             return False
     return True
 
@@ -93,31 +109,59 @@ def build_indexnow_payload(host: str, key: str, urls: list) -> dict:
 
 # ------------------------------------------------------------------ network IO
 
-def make_fetcher(user_agent: str, timeout: float, max_bytes: int = MAX_FETCH_BYTES):
+class _SameSiteRedirectHandler(HTTPRedirectHandler):
+    """Follow redirects only when they stay on the target site (http/https).
+
+    A cross-origin (or non-web) redirect is turned into an error, so a same-site
+    robots.txt/sitemap that 30x-redirects to attacker content cannot smuggle a
+    permissive guard result or make us fetch an arbitrary host (SSRF).
+    """
+    def __init__(self, domain):
+        super().__init__()
+        self._domain = domain
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if not same_site(newurl, self._domain):
+            raise urllib.error.HTTPError(
+                newurl, code, f"blocked cross-origin/non-web redirect to {newurl}",
+                headers, fp)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def make_fetcher(user_agent: str, timeout: float, domain: str,
+                 max_bytes: int = MAX_FETCH_BYTES):
+    opener = build_opener(_SameSiteRedirectHandler(domain))
+
     def fetch(url: str) -> str:
         req = Request(url, headers={"User-Agent": user_agent})
-        with urlopen(req, timeout=timeout) as resp:  # noqa: S310 (http(s) only, validated)
+        with opener.open(req, timeout=timeout) as resp:
             return resp.read(max_bytes).decode("utf-8", "replace")
     return fetch
 
 
 def collect_sitemap_urls(fetch, sitemap_url, domain, limit=DEFAULT_LIMIT, max_depth=1):
-    """Fetch *sitemap_url* and return page URLs on *domain*, following one level
-    of sitemap-index nesting. Only same-site URLs are kept (anti-SSRF).
+    """Return same-site page URLs from a sitemap, or None if the top-level sitemap
+    could not be retrieved/parsed.
+
+    Distinguishes a *valid empty* sitemap ([]) from an *unavailable* one (None) so
+    the caller never invents URLs on a failed fetch. Follows one level of
+    sitemap-index nesting; child sitemaps must be same-site, and an index's <loc>s
+    (which are sitemaps, not pages) are never submitted as page URLs.
     """
     out = []
+    top_ok = [True]
 
     def _walk(url, depth):
         if len(out) >= limit:
             return
         try:
             xml = fetch(url)
-        except Exception as exc:  # a missing/broken child sitemap is not fatal
+        except Exception as exc:
             log(f"sitemap fetch FAIL {url} ({type(exc).__name__})")
+            if depth == 0:
+                top_ok[0] = False
             return
         if is_sitemap_index(xml):
-            # An index's <loc>s are child sitemaps, never pages. Recurse within
-            # the depth budget; at the limit, stop (do NOT submit sitemap URLs).
             if depth < max_depth:
                 for child in extract_locs(xml):
                     if same_site(child, domain):
@@ -126,12 +170,14 @@ def collect_sitemap_urls(fetch, sitemap_url, domain, limit=DEFAULT_LIMIT, max_de
                         return
             return
         for loc in extract_locs(xml):
-            if loc.startswith("http") and same_site(loc, domain):
+            if same_site(loc, domain):
                 out.append(loc)
                 if len(out) >= limit:
                     return
 
     _walk(sitemap_url, 0)
+    if not top_ok[0]:
+        return None
     return out[:limit]
 
 
@@ -180,17 +226,20 @@ def submit_gsc_sitemap(domain, sitemap_url, gsc_key_file) -> bool:
         log("GSC sitemap resubmit OK")
         return True
     except Exception as e:
-        log(f"GSC sitemap resubmit FAIL: {type(e).__name__}: {e}")
+        log(f"GSC sitemap resubmit FAIL: {type(e).__name__}")
         return False
-
-
-def log(msg: str) -> None:
-    print(msg, flush=True)
 
 
 # ------------------------------------------------------------------------- CLI
 
 def _resolve_key(args) -> str:
+    """Resolve the IndexNow key with strict precedence and no surprising fallback.
+
+    Order: explicit --indexnow-key value, then an explicitly selected key file
+    (--indexnow-key-file or INDEXNOW_KEY_FILE), then the INDEXNOW_KEY env value.
+    If an explicitly selected file is unreadable we DISABLE IndexNow rather than
+    silently falling back to an inherited environment key.
+    """
     if args.indexnow_key:
         return args.indexnow_key.strip()
     path = args.indexnow_key_file or os.environ.get("INDEXNOW_KEY_FILE")
@@ -200,6 +249,7 @@ def _resolve_key(args) -> str:
                 return f.read().strip()
         except OSError as exc:
             log(f"IndexNow key file unreadable ({exc}) -> IndexNow disabled")
+            return ""
     return os.environ.get("INDEXNOW_KEY", "").strip()
 
 
@@ -222,33 +272,40 @@ def main(argv=None) -> int:
     domain = args.domain.strip().lower().rstrip("/")
     if not domain or "/" in domain:
         ap.error("domain must be a bare host like example.com")
+    if args.limit < 0:
+        ap.error("--limit must be >= 0")
     sitemap_url = args.sitemap or f"https://{domain}/sitemap.xml"
     if not same_site(sitemap_url, domain):
-        ap.error("--sitemap must be on the target domain")
+        ap.error("--sitemap must be an http(s) URL on the target domain")
     ua = args.user_agent or f"indexnow-ping (+https://{domain})"
-    fetch = make_fetcher(ua, args.timeout)
+    fetch = make_fetcher(ua, args.timeout, domain)
 
     if not args.force and not preflight_guard(fetch, domain):
-        return 1  # pre-launch: intentionally non-zero so cron/CI notices
+        return 1  # pre-launch guard aborted
 
     urls = collect_sitemap_urls(fetch, sitemap_url, domain, limit=args.limit)
-    log(f"sitemap URLs on {domain}: {len(urls)}")
-    if not urls:
-        urls = [f"https://{domain}/"]
+    if urls is None:
+        log("sitemap unavailable -> not submitting any URLs to IndexNow")
+        urls = []
+    else:
+        log(f"sitemap URLs on {domain}: {len(urls)}")
 
     did_any = False
     if args.gsc_key_file:
         did_any |= submit_gsc_sitemap(domain, sitemap_url, args.gsc_key_file)
 
     key = _resolve_key(args)
-    if key:
+    if key and urls:
         status = submit_indexnow(domain, key, urls, args.timeout)
         did_any |= status in (200, 202)
+    elif key and not urls:
+        log("IndexNow SKIP: no sitemap URLs to submit")
     else:
         log("IndexNow SKIP: no key provided (--indexnow-key / --indexnow-key-file / env)")
 
     if not did_any:
-        log("nothing submitted (no GSC key and no IndexNow key, or both failed)")
+        log("nothing submitted")
+        return 3  # ran, but nothing was submitted (misconfig / empty / all failed)
     return 0
 
 
