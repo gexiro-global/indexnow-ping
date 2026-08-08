@@ -139,6 +139,19 @@ def test_redirect_handler_blocks_cross_origin():
                            "moved", {}, "https://evil.com/x")
 
 
+def test_make_fetcher_installs_same_site_redirect_handler(monkeypatch):
+    # prove the production fetcher actually wires the guard handler in
+    captured = {}
+    real = ping.build_opener
+    def capture(*handlers):
+        captured["handlers"] = handlers
+        return real(*handlers)
+    monkeypatch.setattr(ping, "build_opener", capture)
+    ping.make_fetcher("ua", 5, "example.com")
+    installed = [h for h in captured["handlers"] if isinstance(h, ping._SameSiteRedirectHandler)]
+    assert installed and installed[0]._domain == "example.com"
+
+
 def test_redirect_handler_allows_same_site():
     h = ping._SameSiteRedirectHandler("example.com")
     req = h.redirect_request(Request("https://example.com/a"), None, 301,
