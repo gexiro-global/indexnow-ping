@@ -30,6 +30,8 @@ def test_robots_blanket_block_aborts_various_whitespace():
     assert ping.robots_allows_launch("User-agent: *\nDisallow:\t/") is False       # tab
     assert ping.robots_allows_launch("User-agent: * # all\nDisallow: /") is False   # inline comment
     assert ping.robots_allows_launch("User-agent: *\nDisallow: / # pre-launch") is False
+    # consecutive user-agent lines form ONE group: '*' is blocked too
+    assert ping.robots_allows_launch("User-agent: *\nUser-agent: Bot\nDisallow: /") is False
 
 
 def test_robots_allows_when_not_blanket():
@@ -99,6 +101,17 @@ def test_collect_top_failure_returns_none():
     def boom(url):
         raise OSError("dns")
     assert ping.collect_sitemap_urls(boom, "https://example.com/sitemap.xml", "example.com") is None
+
+
+def test_collect_malformed_top_returns_none():
+    # a fetched-but-unparseable top sitemap is unavailable, not a valid-empty one
+    assert ping.collect_sitemap_urls(lambda u: "not xml <<<",
+                                     "https://example.com/sitemap.xml", "example.com") is None
+
+
+def test_collect_zero_limit_submits_nothing():
+    assert ping.collect_sitemap_urls(lambda u: URLSET, "https://example.com/sitemap.xml",
+                                     "example.com", limit=0) == []
 
 
 def test_collect_child_failure_is_not_fatal():
@@ -191,15 +204,17 @@ def test_main_force_skips_guard_and_pings(monkeypatch):
     assert calls["indexnow"] == ("example.com", "K", ("https://example.com/a",))
 
 
-def test_main_sitemap_unavailable_does_not_invent_root(monkeypatch):
-    called = {"n": False}
+def test_main_sitemap_unavailable_aborts_both_layers(monkeypatch):
+    calls = {"in": False, "gsc": False}
     monkeypatch.setattr(ping, "make_fetcher", lambda *a, **k: (lambda url: ""))
     monkeypatch.setattr(ping, "collect_sitemap_urls", lambda *a, **k: None)  # unavailable
     monkeypatch.setattr(ping, "submit_indexnow",
-                        lambda *a, **k: called.__setitem__("n", True) or 200)
-    rc = ping.main(["example.com", "--force", "--indexnow-key", "K"])
-    assert rc == 3            # ran, nothing submitted
-    assert called["n"] is False  # never pinged with an invented root URL
+                        lambda *a, **k: calls.__setitem__("in", True) or 200)
+    monkeypatch.setattr(ping, "submit_gsc_sitemap",
+                        lambda *a, **k: calls.__setitem__("gsc", True) or True)
+    rc = ping.main(["example.com", "--force", "--indexnow-key", "K", "--gsc-key-file", "/x.json"])
+    assert rc == 3
+    assert calls["in"] is False and calls["gsc"] is False  # neither engine told to look
 
 
 def test_main_no_key_skips_indexnow(monkeypatch):

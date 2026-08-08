@@ -61,12 +61,16 @@ def same_site(url: str, domain: str) -> bool:
 
 
 def robots_allows_launch(robots_text: str) -> bool:
-    """Launch guard: only a blanket `User-agent: *` + `Disallow: /` aborts.
+    """Launch guard: abort when a group covering `*` has `Disallow: /`.
 
-    Robust to inline comments and arbitrary whitespace (tabs/spaces). Any other
-    robots configuration (including none) is treated as launched.
+    Models robots.txt grouping: consecutive `User-agent` lines form ONE group, so
+    `User-agent: *` + `User-agent: Bot` + `Disallow: /` blocks `*` too. A rule line
+    ends the agent list; the next `User-agent` starts a new group. Robust to inline
+    comments and arbitrary whitespace. Any other configuration (including none) is
+    treated as launched.
     """
-    in_star = False
+    star_group = False      # current group's agents include '*'
+    reading_agents = False  # still accumulating User-agent lines for this group
     for raw in robots_text.splitlines():
         line = raw.split("#", 1)[0].strip()  # drop inline comments
         if not line or ":" not in line:
@@ -75,9 +79,15 @@ def robots_allows_launch(robots_text: str) -> bool:
         field = field.strip().lower()
         value = value.strip()
         if field == "user-agent":
-            in_star = value == "*"
-        elif field == "disallow" and in_star and value == "/":
-            return False
+            if not reading_agents:      # a rule closed the previous group -> new one
+                star_group = False
+                reading_agents = True
+            if value == "*":
+                star_group = True
+        else:
+            reading_agents = False      # first rule line fixes this group's agents
+            if field == "disallow" and star_group and value == "/":
+                return False
     return True
 
 
@@ -161,15 +171,24 @@ def collect_sitemap_urls(fetch, sitemap_url, domain, limit=DEFAULT_LIMIT, max_de
             if depth == 0:
                 top_ok[0] = False
             return
-        if is_sitemap_index(xml):
+        try:
+            root = ET.fromstring(xml)
+        except ET.ParseError:
+            log(f"sitemap parse FAIL {url}")
+            if depth == 0:  # an unparseable top sitemap is unavailable, not empty
+                top_ok[0] = False
+            return
+        locs = [(e.text or "").strip() for e in root.iter()
+                if _localname(e.tag) == "loc" and (e.text or "").strip()]
+        if _localname(root.tag) == "sitemapindex":
             if depth < max_depth:
-                for child in extract_locs(xml):
+                for child in locs:
                     if same_site(child, domain):
                         _walk(child, depth + 1)
                     if len(out) >= limit:
                         return
             return
-        for loc in extract_locs(xml):
+        for loc in locs:
             if same_site(loc, domain):
                 out.append(loc)
                 if len(out) >= limit:
@@ -285,10 +304,11 @@ def main(argv=None) -> int:
 
     urls = collect_sitemap_urls(fetch, sitemap_url, domain, limit=args.limit)
     if urls is None:
-        log("sitemap unavailable -> not submitting any URLs to IndexNow")
-        urls = []
-    else:
-        log(f"sitemap URLs on {domain}: {len(urls)}")
+        # Could not retrieve/parse the sitemap at all -> do not tell any search
+        # engine to look at it (neither IndexNow nor a GSC resubmit).
+        log("sitemap unavailable -> aborting (no IndexNow, no GSC resubmit)")
+        return 3
+    log(f"sitemap URLs on {domain}: {len(urls)}")
 
     did_any = False
     if args.gsc_key_file:
