@@ -27,11 +27,3 @@ without the network.
   regression test.
 - The tool never invents URLs — it submits what the sitemap lists.
 - Match the surrounding code; keep functions small.
-
-## Sign-off
-
-Contributions should carry a Developer Certificate of Origin sign-off:
-
-```text
-Signed-off-by: Your Name <you@example.com>
-```

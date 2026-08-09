@@ -1,17 +1,17 @@
-# indexnow-ping — safe sitemap submission for IndexNow and Google Search Console
+# indexnow-ping
 
-[![ci](https://github.com/gexiro-global/indexnow-ping/actions/workflows/ci.yml/badge.svg)](https://github.com/gexiro-global/indexnow-ping/actions/workflows/ci.yml)
+[![CI](https://github.com/gexiro-global/indexnow-ping/actions/workflows/ci.yml/badge.svg)](https://github.com/gexiro-global/indexnow-ping/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/indexnow-ping.svg)](https://pypi.org/project/indexnow-ping/)
+[![Python](https://img.shields.io/pypi/pyversions/indexnow-ping.svg)](https://pypi.org/project/indexnow-ping/)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
 
 Tell the search engines your site changed — **without accidentally announcing a
 site that isn't live yet.**
 
-`indexnow-ping` reads a site's own `sitemap.xml`, then:
+`indexnow-ping` reads a site's own `sitemap.xml`, then submits through IndexNow and optionally Google Search Console:
 
 - **IndexNow** — pings `api.indexnow.org`, which fans out to Bing, Yandex and Seznam.
-- **Google Search Console** *(optional)* — resubmits the sitemap via the GSC API.
+- **Google Search Console** — resubmits the sitemap via the GSC API.
 
 Before it pings anything it runs a **pre-launch guard**: it fetches `robots.txt`
 and aborts if the site still blocks every crawler (`User-agent: *` + `Disallow: /`).
@@ -89,5 +89,10 @@ real guard/parsing/same-site/flow logic with no network access.
 
 ## License
 
-[Apache-2.0](LICENSE) © 2026 Gexiro Global Enterprises Ltd. See [`NOTICE`](NOTICE)
-for third-party service and library attribution.
+[Apache-2.0](LICENSE).
+
+Built and maintained by [Gexiro Global Enterprises Ltd](https://gexiro.com).
+
+Third-party service and library attribution: see [NOTICE](NOTICE).
+
+Part of the [Gexiro open-source toolkit](https://github.com/gexiro-global).
