@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+- No unreleased changes.
+
+## [0.1.1] - 2026-08-10
+
 - Ship the inline type-information marker and explicit license-file metadata.
 - Bound build, optional runtime, and development dependencies to tested next-major ceilings
   and complete the package classifiers.
