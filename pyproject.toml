@@ -9,6 +9,7 @@ description = "Notify search engines (IndexNow + Google Search Console) of a sit
 readme = "README.md"
 requires-python = ">=3.9"
 license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
 authors = [
   {name = "Gexiro Global Enterprises Ltd"}
 ]
@@ -45,6 +46,9 @@ indexnow-ping = "indexnow_ping.ping:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["indexnow_ping*"]
+
+[tool.setuptools.package-data]
+indexnow_ping = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
