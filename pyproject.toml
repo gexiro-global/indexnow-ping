@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=68,<77", "wheel>=0.41,<1"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,8 +8,7 @@ version = "0.1.0"
 description = "Notify search engines (IndexNow + Google Search Console) of a site's sitemap URLs, with a pre-launch robots.txt guard."
 readme = "README.md"
 requires-python = ">=3.9"
-license = "Apache-2.0"
-license-files = ["LICENSE", "NOTICE"]
+license = {file = "LICENSE"}
 authors = [
   {name = "Gexiro Global Enterprises Ltd"}
 ]
@@ -19,6 +18,7 @@ keywords = [
 ]
 classifiers = [
   "Development Status :: 4 - Beta",
+  "License :: OSI Approved :: Apache Software License",
   "Intended Audience :: Developers",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.9",
@@ -27,6 +27,7 @@ classifiers = [
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
   "Topic :: Internet :: WWW/HTTP :: Site Management",
+  "Typing :: Typed",
 ]
 dependencies = []
 
